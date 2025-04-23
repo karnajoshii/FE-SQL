@@ -40,7 +40,7 @@ export default function InsuranceChatbot() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("http://192.168.1.14:5000/api/chat", {
+      const response = await fetch("http://192.168.1.55:5000/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: userMessage }),
@@ -73,7 +73,7 @@ export default function InsuranceChatbot() {
 
   const resetConversation = async () => {
     try {
-      await fetch("http://192.168.1.14:5000/api/reset", { method: "POST" });
+      await fetch("http://192.168.1.55:5000/api/reset", { method: "POST" });
       setMessages([]);
     } catch (error) {
       console.error("Error resetting conversation:", error);

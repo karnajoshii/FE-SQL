@@ -35,33 +35,52 @@ const ChartComponents = ({ visualization }) => {
 
   const data = visualization.data;
   const chartType = visualization.type;
-
+  
+  // Get keys from the first data item
   const keys = Object.keys(data[0]);
+  
+  // Determine if we have x/y format or named keys format
+  const isXYFormat = keys.includes('x') && keys.includes('y');
+  
+  // If we have x/y format but also have x_axis/y_axis labels, transform the data
+  let processedData = data;
+  if (isXYFormat && (visualization.x_axis || visualization.y_axis)) {
+    processedData = data.map(item => ({
+      [visualization.x_axis || 'xValue']: item.x,
+      [visualization.y_axis || 'yValue']: item.y
+    }));
+  }
 
-  const categoryKeys = keys.filter(key => {
-    const firstValue = data[0][key];
+  // After potential transformation, get the keys again
+  const dataKeys = Object.keys(processedData[0]);
+
+  const categoryKeys = dataKeys.filter(key => {
+    const firstValue = processedData[0][key];
     return typeof firstValue === 'string' || isNaN(parseFloat(firstValue));
   });
 
-  const valueKeys = keys.filter(key => {
-    const firstValue = data[0][key];
+  const valueKeys = dataKeys.filter(key => {
+    const firstValue = processedData[0][key];
     return typeof firstValue === 'number' || !isNaN(parseFloat(firstValue));
   });
 
-  const dataKey = visualization.xAxis || 
-    (keys.includes('Vehicle Size') ? 'Vehicle Size' : categoryKeys[0] || keys[0]);
+  // Determine data keys based on visualization props or data structure
+  const dataKey = visualization.x_axis || 
+    (isXYFormat ? visualization.x_axis || 'xValue' : 
+      dataKeys.includes('Vehicle Size') ? 'Vehicle Size' : categoryKeys[0] || dataKeys[0]);
 
-  const valueKey = visualization.yAxis || 
-    (keys.includes('Total Claim Amount') ? 'Total Claim Amount' : valueKeys[0] || keys[1] || keys[0]);
+  const valueKey = visualization.y_axis || 
+    (isXYFormat ? visualization.y_axis || 'yValue' : 
+      dataKeys.includes('Total Claim Amount') ? 'Total Claim Amount' : valueKeys[0] || dataKeys[1] || dataKeys[0]);
 
-  const colors = generateColors(data.length);
+  const colors = generateColors(processedData.length);
 
   switch (chartType) {
     case 'bar':
       return (
         <div className="w-full h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 50 }}>
+            <BarChart data={processedData} margin={{ top: 5, right: 30, left: 20, bottom: 50 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey={dataKey} angle={-45} textAnchor="end" height={70} />
               <YAxis />
@@ -79,7 +98,7 @@ const ChartComponents = ({ visualization }) => {
           <ResponsiveContainer width="100%" height="100%">
             <PieChart margin={{ top: 5, right: 30, left: 20, bottom: 50 }}>
               <Pie
-                data={data}
+                data={processedData}
                 cx="50%"
                 cy="50%"
                 outerRadius="80%"
@@ -89,7 +108,7 @@ const ChartComponents = ({ visualization }) => {
                 dataKey={valueKey}
                 nameKey={dataKey}
               >
-                {data.map((entry, index) => (
+                {processedData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
                 ))}
               </Pie>
@@ -104,7 +123,7 @@ const ChartComponents = ({ visualization }) => {
       return (
         <div className="w-full h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 50 }}>
+            <LineChart data={processedData} margin={{ top: 5, right: 30, left: 20, bottom: 50 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey={dataKey} angle={-45} textAnchor="end" height={70} />
               <YAxis />
@@ -117,19 +136,19 @@ const ChartComponents = ({ visualization }) => {
       );
 
     case 'scatter':
-      const scatterXKey = visualization.xAxis || valueKeys[0] || keys[0];
-      const scatterYKey = visualization.yAxis || (valueKeys.length > 1 ? valueKeys[1] : valueKeys[0]);
+      const scatterXKey = visualization.x_axis || (isXYFormat ? 'xValue' : valueKeys[0] || dataKeys[0]);
+      const scatterYKey = visualization.y_axis || (isXYFormat ? 'yValue' : (valueKeys.length > 1 ? valueKeys[1] : valueKeys[0]));
 
       return (
         <div className="w-full h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
             <ScatterChart margin={{ top: 5, right: 30, left: 20, bottom: 50 }}>
               <CartesianGrid />
-              <XAxis dataKey={scatterXKey} name={scatterXKey} />
-              <YAxis dataKey={scatterYKey} name={scatterYKey} />
+              <XAxis dataKey={scatterXKey} name={visualization.x_label || scatterXKey} />
+              <YAxis dataKey={scatterYKey} name={visualization.y_label || scatterYKey} />
               <Tooltip formatter={(value) => typeof value === 'number' ? value.toLocaleString() : value} />
               <Legend />
-              <Scatter name="Data Points" data={data} fill="#8884d8" />
+              <Scatter name="Data Points" data={processedData} fill="#8884d8" />
             </ScatterChart>
           </ResponsiveContainer>
         </div>
