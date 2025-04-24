@@ -19,6 +19,56 @@ export default function InsuranceChatbot() {
     scrollToBottom();
   }, [messages]);
 
+  // Fetch chat history on component mount
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const response = await fetch("http://192.168.1.55:5000/api/history", {
+          method: "GET",
+          credentials: "include",
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => "No response text");
+          const errorDetails = {
+            status: response.status,
+            statusText: response.statusText,
+            responseText: errorText,
+          };
+          console.error("History fetch error details:", errorDetails);
+          if (response.status === 0 || response.statusText.includes("CORS")) {
+            throw new Error("CORS issue: Unable to fetch chat history. Check server CORS settings.");
+          }
+          throw new Error(`HTTP error: ${response.status} - ${errorText}`);
+        }
+
+        const data = await response.json();
+        if (data.error) {
+          throw new Error(`Server error: ${data.error}`);
+        }
+        setMessages(data.history || []);
+        console.log("Chat history loaded:", data.history);
+      } catch (error) {
+        console.error("Error fetching history:", error.message, error.stack);
+        setMessages((prev) => [
+          ...prev,
+          {
+            text: error.message.includes("CORS")
+              ? "Failed to load chat history due to a server configuration issue. Please try again later."
+              : `Failed to load chat history: ${error.message}. Please try again.`,
+            sender: "bot",
+            timestamp: new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+          },
+        ]);
+      }
+    };
+
+    fetchHistory();
+  }, []);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -44,24 +94,40 @@ export default function InsuranceChatbot() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: userMessage }),
+        credentials: "include",
       });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "No response text");
+        console.error("Chat fetch error details:", {
+          status: response.status,
+          statusText: response.statusText,
+          responseText: errorText,
+        });
+        if (response.status === 0 || response.statusText.includes("CORS")) {
+          throw new Error("CORS issue: Unable to connect to the server. Check server settings.");
+        }
+        throw new Error(`HTTP error: ${response.status} - ${errorText}`);
+      }
 
       const data = await response.json();
       setMessages((prev) => [
         ...prev,
         {
           text: data.response,
-          senderwoord: "bot",
+          sender: "bot",
           visualization: data.visualization,
           timestamp,
         },
       ]);
     } catch (error) {
-      console.error("Error:", error);
+      console.error("Error submitting message:", error.message, error.stack);
       setMessages((prev) => [
         ...prev,
         {
-          text: "Oops, something went wrong. Try again!",
+          text: error.message.includes("CORS")
+            ? "Failed to connect due to a server configuration issue. Please try again later."
+            : `Oops, something went wrong: ${error.message}. Please try again!`,
           sender: "bot",
           timestamp,
         },
@@ -73,25 +139,58 @@ export default function InsuranceChatbot() {
 
   const resetConversation = async () => {
     try {
-      await fetch("http://192.168.1.55:5000/api/reset", { method: "POST" });
-      setMessages([]);
+      const response = await fetch("http://192.168.1.55:5000/api/reset", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "No response text");
+        console.error("Reset fetch error details:", {
+          status: response.status,
+          statusText: response.statusText,
+          responseText: errorText,
+        });
+        if (response.status === 0 || response.statusText.includes("CORS")) {
+          throw new Error("CORS issue: Unable to reset conversation. Check server settings.");
+        }
+        throw new Error(`Failed to reset conversation: ${errorText}`);
+      }
+      setMessages([
+        {
+          text: "Conversation reset! Ask me anything about auto insurance.",
+          sender: "bot",
+          timestamp: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+        },
+      ]);
     } catch (error) {
-      console.error("Error resetting conversation:", error);
+      console.error("Error resetting conversation:", error.message, error.stack);
+      setMessages((prev) => [
+        ...prev,
+        {
+          text: error.message.includes("CORS")
+            ? "Failed to reset conversation due to a server issue. Please try again later."
+            : `Failed to reset conversation: ${error.message}. Please try again.`,
+          sender: "bot",
+          timestamp: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+        },
+      ]);
     }
   };
 
   return (
     <div className="flex flex-col min-h-screen bg-gradient-to-br from-blue-50 to-gray-100">
       {/* Header */}
-
       <header className="bg-gray-900 text-white p-4 shadow-lg">
         <div className="relative flex items-center justify-center max-w-screen-xl mx-auto">
-          {/* Center: Title */}
           <h1 className="text-2xl font-semibold text-center">
             Auto Insurance Assistant
           </h1>
-
-          {/* Right: New Chat Button */}
           <div className="absolute right-4">
             <button
               onClick={resetConversation}
@@ -123,7 +222,6 @@ export default function InsuranceChatbot() {
                   msg.sender === "user" ? "items-end" : "items-start"
                 } animate-slide-in w-full`}
               >
-                {/* Message Container */}
                 <div
                   className={`max-w-[75%] p-4 rounded-2xl shadow-sm ${
                     msg.sender === "user"
@@ -133,7 +231,6 @@ export default function InsuranceChatbot() {
                 >
                   <p className="text-sm">{msg.text}</p>
                 </div>
-                {/* Chart Container (Full Width) */}
                 {msg.visualization && (
                   <div className="w-full mt-2">
                     <div className="text-center text-xs font-medium text-gray-600 mb-2">
